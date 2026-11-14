@@ -12,7 +12,10 @@ import { clamp, dist2D, rand } from '../core/Utils.js';
 export class EnemyManager {
   constructor(app) {
     this.app = app;
-    this.nav = new NavGraph(app.world.waypoints, app.world.blockers, 24);
+    // 30 m max edge: the port's waypoint spacing needs it (a 24 m cap leaves
+    // pockets of the graph disconnected around low walls → A* falls back to
+    // straight lines through geometry)
+    this.nav = new NavGraph(app.world.waypoints, app.world.blockers, 30);
     this.enemies = [];
     this.soundQueue = [];
     this.enemyGrenades = [];
@@ -28,6 +31,8 @@ export class EnemyManager {
     }
     // temp vectors (shared, no per-frame allocation)
     this._v1 = new THREE.Vector3();
+    this._canFire = new Set();   // per-frame engagement cap (see update)
+    this.MAX_SHOOTERS = 2;       // only the nearest N actively shoot the player
     this._v2 = new THREE.Vector3();
     this._v3 = new THREE.Vector3();
     this._v4 = new THREE.Vector3();
@@ -129,7 +134,10 @@ export class EnemyManager {
     if (player.crouchT > 0.5) acc *= 0.85;
     if (app.weapons.adsT > 0.5) acc *= 0.9;
     if (player.hSpeed > 3) acc *= 0.8;
-    const hit = Math.random() < clamp(acc, 0.03, 0.92);
+    // aim acquisition: an enemy needs a moment after spotting to track you
+    const engageT = e.brain ? e.brain.stateT : 5;
+    if (engageT < 1.5) acc *= 0.35 + 0.65 * (engageT / 1.5);
+    const hit = Math.random() < clamp(acc, 0.02, 0.88);
 
     e.muzzle.getWorldPosition(this._v1);
     const chest = this._v2.set(player.pos.x, player.pos.y + 1.35, player.pos.z);
@@ -230,6 +238,19 @@ export class EnemyManager {
         }
       }
       this.soundQueue.length = 0;
+    }
+
+    // engagement cap: only the nearest N live, aiming enemies actually shoot —
+    // the rest keep advancing/taking cover, so squads stay tactical, not a wall of lead
+    this._canFire.clear();
+    if (this.MAX_SHOOTERS > 0) {
+      const aiming = [];
+      for (const e of this.enemies) {
+        if (e.dead || !e.wantFire) continue;   // wantFire = sees player, in fire range
+        aiming.push([dist2D(e.pos.x, e.pos.z, player.pos.x, player.pos.z), e]);
+      }
+      aiming.sort((a, b) => a[0] - b[0]);
+      for (let i = 0; i < Math.min(this.MAX_SHOOTERS, aiming.length); i++) this._canFire.add(aiming[i][1]);
     }
 
     for (const e of this.enemies) e.update(dt, t);

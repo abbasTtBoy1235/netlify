@@ -97,6 +97,10 @@ export class Mission {
       case 'reach':
         if (st.ref === 'gate') return { x: w.infiltrate.x, z: w.infiltrate.z };
         return w.relaysPos[st.ref];
+      case 'destroy':
+        // bugfix: was missing — returned null, so the HUD objective marker
+        // and anything targeting the stage had no position during relay ops
+        return w.relaysPos[st.ref] || null;
       case 'extract':
         return w.extract;
       case 'killall':

@@ -51,6 +51,9 @@ export class Player {
     this._sprintLock = false;
   }
 
+  /** three.js-style alias for the position vector (world systems read this). */
+  get position() { return this.pos; }
+
   get forward() {
     return this._tmpV.set(-Math.sin(this.yaw), 0, -Math.cos(this.yaw));
   }

@@ -28,9 +28,84 @@ const freshStats = () => ({
   damageDealt: 0, damageTaken: 0, grenades: 0
 });
 
+// ---------------------------------------------------------------- headless
+// Stub surfaces used by the headless test rig (new App(null, { headless: true })):
+// same App wiring, no WebGL/DOM. Every system under test is the real one.
+
+class HeadlessRenderer {
+  constructor() {
+    this.domElement = null;
+    this.info = { render: { calls: 0 } };
+    this.shadowMap = { enabled: false, type: 0 };
+  }
+  setSize() {} render() {} setClearColor() {} setPixelRatio() {}
+}
+
+class HeadlessInput {
+  constructor() {
+    this.keys = new Set();
+    this.edges = new Set();
+    this.mouse = { fire: false, aim: false, fireEdge: false, aimEdge: false };
+    this.locked = false; this.fallback = true;
+    this.sens = 1; this.adsSens = 0.5; this.aiming = false; this.paused = false;
+    this.lookDX = 0; this.lookDY = 0; this.mouseX = 0; this.mouseY = 0;
+    this.onLockChange = null;
+  }
+  attach() {} dispose() {} refresh() {}
+  requestLock() { return true; } releaseLock() {} enableFallback() {}
+  endFrame() { this.edges.clear(); this.mouse.fireEdge = false; this.mouse.aimEdge = false; this.lookDX = 0; this.lookDY = 0; }
+  /** Frame state, computed from keys exactly like the real InputManager. */
+  get state() {
+    const k = (code) => this.keys.has(code);
+    return {
+      forward: (k('KeyW') ? 1 : 0) - (k('KeyS') ? 1 : 0),
+      strafe: (k('KeyD') ? 1 : 0) - (k('KeyA') ? 1 : 0),
+      sprint: k('ShiftLeft') || k('ShiftRight'),
+      crouch: k('ControlLeft') || k('ControlRight') || k('KeyC'),
+      aim: this.mouse.aim,
+      fire: this.mouse.fire,
+      lookDX: this.lookDX,
+      lookDY: this.lookDY,
+      fallback: this.fallback,
+      cursor: { x: this.mouseX, y: this.mouseY }
+    };
+  }
+  pressed(code) { return this.edges.has(code); }
+  jumpPressed() { return this.edges.has('Space'); }
+  firePressed() { return this.mouse.fireEdge; }
+  reloadPressed() { return this.edges.has('KeyR'); }
+  interactHeld() { return this.keys.has('KeyF'); }
+  interactPressed() { return this.edges.has('KeyF'); }
+  grenadePressed() { return this.edges.has('KeyG'); }
+  grenadeCyclePressed() { return this.edges.has('KeyV'); }
+  leanLeft() { return this.keys.has('KeyQ'); }
+  leanRight() { return this.keys.has('KeyE'); }
+  slotPressed(n) { return this.edges.has('Digit' + n); }
+  debugPressed() { return this.edges.has('F3'); }
+  pausePressed() { return this.edges.has('Escape'); }
+  wheelNext() { return this.edges.has('WheelNext'); }
+  wheelPrev() { return this.edges.has('WheelPrev'); }
+}
+
+class HeadlessHUD {
+  constructor() { this.notifies = []; this.prompts = []; }
+  show() {} hide() {} applySettings() {} setHealth(h, a) { this.hp = h; this.armor = a; }
+  setStamina() {} setSpread() {} setWeapon() {} setGrenades() {} setScope() {}
+  updateObjectives() {} setDistance() {} compass() {} minimap() {} hitMarker() {}
+  damage() {} flashWhite() {} killFeed() {} hint() {} debug() {} aimNote() {} frameOverlay() {}
+  notify(t) { this.notifies.push(t); }
+  prompt(t) { if (t) this.prompts.push(t); }
+}
+
+class HeadlessMenus {
+  constructor() {}
+  show() {} hide() {} showBriefing() {} showComplete() {} showDead() {}
+}
+
 export class App {
-  constructor(container) {
+  constructor(container, opts = {}) {
     this.container = container;
+    this.headless = !!opts.headless;
     this.state = 'boot';
     this.time = 0;
     this.settings = new Settings();
@@ -41,15 +116,19 @@ export class App {
     this.onAutoplayFrame = null;
 
     // renderer
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.06;
-    this.renderer.shadowMap.enabled = this.settings.presetCfg.shadows;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    this.renderer.setClearColor(0x0a0e13);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, this.settings.presetCfg.pixelRatio || 2));
-    container.appendChild(this.renderer.domElement);
+    if (this.headless) {
+      this.renderer = new HeadlessRenderer();
+    } else {
+      this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+      this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+      this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      this.renderer.toneMappingExposure = 1.06;
+      this.renderer.shadowMap.enabled = this.settings.presetCfg.shadows;
+      this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      this.renderer.setClearColor(0x0a0e13);
+      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, this.settings.presetCfg.pixelRatio || 2));
+      container.appendChild(this.renderer.domElement);
+    }
 
     this.scene = new THREE.Scene();
     this.fogRef = new THREE.FogExp2(0x2a3644, this.settings.presetCfg.fog);
@@ -60,17 +139,22 @@ export class App {
     this.raycaster = new THREE.Raycaster();
     this.rayTmp = new THREE.Ray();
 
-    this.input = new InputManager(this.renderer.domElement);
-    this.input.attach();
-    this.input.onLockChange = (locked) => {
-      if (this.state === 'playing' && !locked && !this.autoplay) this.pause();
-    };
+    if (this.headless) {
+      this.input = new HeadlessInput();
+      this.hud = new HeadlessHUD();
+      this.menus = new HeadlessMenus();
+    } else {
+      this.input = new InputManager(this.renderer.domElement);
+      this.input.attach();
+      this.input.onLockChange = (locked) => {
+        if (this.state === 'playing' && !locked && !this.autoplay) this.pause();
+      };
+      this.hud = new HUD(document.getElementById('hud'), this);
+      this.menus = new Menus(document.getElementById('menus'), this);
+    }
 
     this.audio = new AudioEngine();
     this.audio._wantAmbience = true;
-
-    this.hud = new HUD(document.getElementById('hud'), this);
-    this.menus = new Menus(document.getElementById('menus'), this);
 
     // global event subscriptions
     this.emitter.on('player-damaged', (d) => { this.stats.damageTaken += d.amount; });
@@ -85,7 +169,7 @@ export class App {
     this._v1 = new THREE.Vector3();
     this._v2 = new THREE.Vector3();
 
-    window.addEventListener('resize', () => this.resize());
+    if (!this.headless) window.addEventListener('resize', () => this.resize());
     this.resize();
     this._loop = this._loop.bind(this);
   }
@@ -93,9 +177,18 @@ export class App {
   // ------------------------------------------------------------- boot
 
   start() {
+    if (this.headless) { this.menus.show('main'); return; }
     document.getElementById('boot').classList.add('done');
     this.menus.show('main');
     requestAnimationFrame(this._loop);
+  }
+
+  /** Advance the simulation by dt seconds (drives the headless test rig). */
+  advance(dt) {
+    this._frame(dt);
+    // mirror what renderer.render() does in the browser: keep world matrices
+    // current so raycasts (bullets, LOS) test real geometry headlessly
+    this.scene.updateMatrixWorld();
   }
 
   unlockAudio() {
@@ -104,7 +197,8 @@ export class App {
   }
 
   resize() {
-    const w = window.innerWidth, h = window.innerHeight;
+    const w = this.headless ? 1280 : window.innerWidth;
+    const h = this.headless ? 720 : window.innerHeight;
     this.renderer.setSize(w, h);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
@@ -151,7 +245,7 @@ export class App {
     this.relays = {};
     for (const [id, p] of Object.entries(this.world.relaysPos)) {
       this.relays[id] = new Relay(this.scene, id, p);
-      this.relays[id].setAppRef(this);
+      this.relays[id].appRef = this;
     }
     if (resume && resume.relayHp) {
       for (const [id, hp] of Object.entries(resume.relayHp)) {
@@ -402,6 +496,12 @@ export class App {
     requestAnimationFrame(this._loop);
     const dt = clamp((performance.now() - (this._lastT || performance.now())) / 1000, 0.001, 0.05);
     this._lastT = performance.now();
+    this._frame(dt);
+    this.renderer.render(this.scene, this.camera);
+  }
+
+  /** One simulated frame: input → systems → HUD (no render in headless). */
+  _frame(dt) {
     this._fps = this._fps * 0.95 + (1 / dt) * 0.05;
     this.time += dt;
     const t = this.time;
@@ -419,7 +519,6 @@ export class App {
     }
 
     this.input.endFrame();
-    this.renderer.render(this.scene, this.camera);
   }
 
   _updateAmbient(dt, t) {

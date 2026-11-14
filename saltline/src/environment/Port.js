@@ -339,6 +339,10 @@ export class Port {
     const wp = this.waypoints;
     const corridor = [-116, -100, -84, -68, -52, -36, -20, 20, 40, 60, 80, 100];
     for (const x of corridor) wp.push({ x, z: -51 });
+    // west lane around the mid-wall (x −90..−78, z −35.3..−32.7): without a
+    // node here the direct (−84,−51)→(−94,−26) edge clips the wall corner,
+    // and A* is forced onto a 67 m east-then-north-then-west detour
+    wp.push({ x: -94, z: -51 });
     for (const z of [-80, -63, -26, -9, 8, 26]) {
       for (const x of [-110, -94, -78, -62, -46, -30]) wp.push({ x, z });
     }
@@ -551,7 +555,9 @@ export class Port {
 
   /** Keep positions on solid ground (no water, inside the fence line). */
   clampToGround(pos) {
-    pos.x = clamp(pos.x, -118.5, 118.5);
+    // west: outer apron up to the ground edge (spawn sits outside the fence);
+    // east: soft world limit; z: wall / water edges
+    pos.x = clamp(pos.x, -129.5, 118.5);
     const pierX = pos.x > -30 && pos.x < 65;
     pos.z = clamp(pos.z, -99.5, pierX ? 72.4 : 69.4);
     return pos;

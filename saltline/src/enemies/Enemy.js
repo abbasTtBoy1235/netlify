@@ -40,11 +40,11 @@ export class Enemy {
     this._aimT = 0;
     this._seed = Math.random() * 10;
 
+    this.partMeshes = []; // must exist before _buildModel registers hit parts
     this.group = this._buildModel();
     this.group.position.copy(this.pos);
     this.group.scale.setScalar(this.def.scale);
     mgr.app.scene.add(this.group);
-    this.partMeshes = [];
     this.brain = new Brain(this);
     this.brain.init(spawn, spawn.mode || 'patrol', spawn.route || null);
   }
@@ -133,7 +133,7 @@ export class Enemy {
     reg(this.helmet, 'head');
     reg(this.torso, 'body');
 
-    this.group.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+    g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
     return g;
   }
 
@@ -206,7 +206,7 @@ export class Enemy {
 
     // firing (per-frame cadence)
     this.fireCd -= dt;
-    if (this.wantFire && this.fireCd <= 0 && this.mag > 0 && this.reloadT <= 0) {
+    if (this.wantFire && this.fireCd <= 0 && this.mag > 0 && this.reloadT <= 0 && this.mgr._canFire.has(this)) {
       this.fireCd = 60 / this.def.weapon.rpm;
       this.mag--;
       this._didFire = true;

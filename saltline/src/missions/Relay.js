@@ -85,6 +85,7 @@ export class Relay {
   destroy(cause) {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.destroyCause = cause;
     this._dieT = 0;
     this.beaconLight.intensity = 0;
     this.beaconMat.emissiveIntensity = 0.1;
@@ -101,7 +102,8 @@ export class Relay {
   }
 
   /** Set by App for effect wiring. */
-  set appRef(app) { this.appRef = app; this.app = app; }
+  set appRef(app) { this.app = app; }
+  get appRef() { return this.app; }
 
   update(dt, t) {
     if (!this.destroyed) {
