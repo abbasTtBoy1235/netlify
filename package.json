@@ -20,5 +20,8 @@
   "homepage": "https://github.com/abbasTtBoy1235/netlify#readme",
   "dependencies": {
     "three": "^0.187.0"
+  },
+  "devDependencies": {
+    "jsdom": "^31.0.1"
   }
 }

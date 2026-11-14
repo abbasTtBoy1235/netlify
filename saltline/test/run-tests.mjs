@@ -297,5 +297,68 @@ section('Data validation');
   ok(Object.keys(ENEMY_DEFS).length >= 5, '5+ enemy classes');
 }
 
+// ------------------------------------------------- Browser DOM (jsdom)
+// Builds the real index.html in a DOM environment and constructs HUD +
+// Menus exactly as App.js does in the browser. The headless sim uses stub
+// DOMs and cannot see missing elements / wrong tags — this section can.
+section('Browser DOM (jsdom) — HUD & Menus build');
+{
+  let JSDOM;
+  try { ({ JSDOM } = await import('jsdom')); } catch {
+    console.log('  ⚠ jsdom not installed — skipping DOM tests (run `npm i` in repo root)');
+  }
+  if (JSDOM) {
+    const { readFileSync } = await import('node:fs');
+    const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+    const dom = new JSDOM(html);
+    const win = dom.window;
+    // jsdom has no canvas 2d backend — return a permissive stub context.
+    win.HTMLCanvasElement.prototype.getContext = () => new Proxy({}, {
+      get: () => () => ({}),
+      set: () => true
+    });
+    globalThis.window = win;
+    globalThis.document = win.document;
+
+    const { HUD } = await import('../src/ui/HUD.js');
+    const { Menus } = await import('../src/ui/Menus.js');
+    const fakeApp = {
+      saveData: null, settings: { data: {} }, audio: { _ok: () => false },
+      unlockAudio() {}, newGame() {}, continueGame() {}, toMenu() {},
+      applySettings() {}, showBriefing() {}, restart() {}
+    };
+
+    const hudRoot = win.document.getElementById('hud');
+    ok(hudRoot, 'index.html provides #hud root');
+    const hud = new HUD(hudRoot, fakeApp);
+
+    const want = ['objMission', 'objTitle', 'objDesc', 'objBarFill', 'objList', 'objDist',
+      'hpFill', 'hpNum', 'armorFill', 'armorNum', 'stamFill', 'wName', 'wMode', 'wMag', 'wRes',
+      'wSlots', 'wGren', 'cross', 'hitmark', 'killfeed', 'notify', 'interact', 'interactText',
+      'interactFill', 'hint', 'debug', 'scopeMask', 'flash', 'aimNote'];
+    let allInDom = true;
+    for (const id of want) {
+      if (!hud.el[id] || !win.document.getElementById(id)) {
+        allInDom = false; console.error(`# missing from DOM: ${id}`);
+      }
+    }
+    ok(allInDom, `all ${want.length} HUD elements attached to document`);
+    const compass = win.document.getElementById('compass');
+    const minimap = win.document.getElementById('minimap');
+    const dmg = win.document.getElementById('dmgOverlay');
+    ok(compass && compass.tagName === 'CANVAS', 'compass is a <canvas>');
+    ok(minimap && minimap.tagName === 'CANVAS', 'minimap is a <canvas>');
+    ok(dmg && dmg.tagName === 'CANVAS', 'damage overlay is a <canvas>');
+    ok(!!hud.compassCtx, 'compass 2d context acquired');
+    ok(!!hud.minimapCtx, 'minimap 2d context acquired');
+    ok(!!hud.dmgCtx, 'damage overlay 2d context acquired');
+
+    const menusRoot = win.document.getElementById('menus');
+    ok(menusRoot, 'index.html provides #menus root');
+    const menus = new Menus(menusRoot, fakeApp);
+    ok(menusRoot.children.length >= 4, `menus screens built (${menusRoot.children.length} screens)`);
+  }
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

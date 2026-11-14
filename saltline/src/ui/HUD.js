@@ -31,9 +31,7 @@ export class HUD {
   }
 
   _build() {
-    const h = (html) => { const d = document.createElement('div'); d.innerHTML = html.trim(); return d.firstElementChild; };
-    this.root.innerHTML = '';
-    this.root.appendChild(h(`
+    this.root.innerHTML = `
       <div class="hud-panel hud-topleft" id="objPanel">
         <div class="obj-mission" id="objMission"></div>
         <div class="obj-title" id="objTitle"></div>
@@ -70,7 +68,7 @@ export class HUD {
       <div class="scope-mask" id="scopeMask"></div>
       <div class="flash" id="flash"></div>
       <div class="aim-note" id="aimNote"></div>
-    `));
+    `;
     this.el = {};
     for (const id of ['objMission', 'objTitle', 'objDesc', 'objBarFill', 'objList', 'objDist',
       'hpFill', 'hpNum', 'armorFill', 'armorNum', 'stamFill', 'wName', 'wMode', 'wMag', 'wRes',
