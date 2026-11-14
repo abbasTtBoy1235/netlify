@@ -1,0 +1,9 @@
+# SALTLINE — browser build. The game is a static site: serve saltline/.
+[build]
+  publish = "saltline"
+
+# Friendly URL fallback to the app shell (single-page game).
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

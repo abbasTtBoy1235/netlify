@@ -1,0 +1,24 @@
+{
+  "name": "netlify",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "node saltline/test/run-tests.mjs",
+    "start": "node devserver.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/abbasTtBoy1235/netlify.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/abbasTtBoy1235/netlify/issues"
+  },
+  "homepage": "https://github.com/abbasTtBoy1235/netlify#readme",
+  "dependencies": {
+    "three": "^0.187.0"
+  }
+}
